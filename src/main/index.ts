@@ -1,10 +1,26 @@
-import { app, shell, BrowserWindow, ipcMain, globalShortcut, clipboard, nativeImage, NativeImage } from 'electron'
+import {
+  app,
+  shell,
+  BrowserWindow,
+  ipcMain,
+  globalShortcut,
+  clipboard,
+  nativeImage,
+  NativeImage,
+  Tray,
+  Menu
+} from 'electron'
 import { join } from 'path'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 // @ts-ignore
 import icon from '../../resources/icon.png?asset'
 import { exec } from 'child_process'
 import Tesseract from 'tesseract.js'
+import { initUpdater } from './updater'
+
+const APP_NAME = 'FastTranslate AI'
+// עלייה עם Windows מוסיפה את הדגל הזה (ראו setLoginItemSettings): פותחים ישר למגש המערכת
+const startHidden = process.argv.includes('--hidden')
 
 process.on('uncaughtException', (error) => {
   console.error("שגיאת מערכת נתפסה:", error);
@@ -17,6 +33,7 @@ if (!gotLock) {
 }
 
 let mainWindow: BrowserWindow | null = null
+let tray: Tray | null = null
 let quitting = false
 let snipping = false
 let workerPromise: Promise<Tesseract.Worker> | null = null
@@ -25,13 +42,38 @@ app.on('before-quit', () => {
   quitting = true
 })
 
-app.on('second-instance', () => {
-  if (mainWindow) {
-    if (mainWindow.isMinimized()) mainWindow.restore()
-    mainWindow.show()
-    mainWindow.focus()
-  }
-})
+const showMainWindow = (): void => {
+  if (!mainWindow) return
+  if (mainWindow.isMinimized()) mainWindow.restore()
+  mainWindow.show()
+  mainWindow.focus()
+}
+
+app.on('second-instance', showMainWindow)
+
+function createTray(): void {
+  const trayIcon = nativeImage.createFromPath(icon).resize({ width: 16, height: 16 })
+  tray = new Tray(trayIcon)
+  tray.setToolTip(`${APP_NAME} - Alt+T תרגום, Alt+S צילום מסך`)
+  tray.setContextMenu(
+    Menu.buildFromTemplate([
+      { label: `פתיחת ${APP_NAME}`, click: showMainWindow },
+      {
+        label: 'אודות',
+        click: () => {
+          showMainWindow()
+          mainWindow?.webContents.send('show-about')
+        }
+      },
+      { type: 'separator' },
+      { label: 'יציאה', click: () => app.quit() }
+    ])
+  )
+  tray.on('click', () => {
+    if (mainWindow?.isVisible() && mainWindow.isFocused()) mainWindow.hide()
+    else showMainWindow()
+  })
+}
 
 const getWorker = () => {
   if (!workerPromise) {
@@ -53,22 +95,26 @@ const getWorker = () => {
 
 function createWindow(): void {
   mainWindow = new BrowserWindow({
-    width: 1000, 
-    height: 600, 
-    minWidth: 500,  // מונע הקטנה שתשבור את העיצוב
-    minHeight: 400, // מונע הקטנה שתשבור את העיצוב
-    resizable: true, // מכריח את ווינדוס לאפשר מתיחה
+    title: APP_NAME,
+    width: 1000,
+    height: 640,
+    minWidth: 560, // מונע הקטנה שתשבור את העיצוב
+    minHeight: 420,
     alwaysOnTop: true,
-    show: true, 
+    show: false, // מוצג ב-ready-to-show כדי שלא יהבהב חלון ריק
+    // חלון בלי מסגרת אבל לא שקוף: ב-Windows 11 הוא מקבל פינות מעוגלות, צל ושינוי גודל רגיל
     frame: false,
-    transparent: true,
+    backgroundColor: '#F4F6F8',
     icon,
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
       sandbox: false
     }
   })
-// ... המשך הקוד נשאר זהה
+
+  mainWindow.once('ready-to-show', () => {
+    if (!startHidden) mainWindow?.show()
+  })
 
   mainWindow.on('close', (event) => {
     if (quitting) return;
@@ -104,11 +150,19 @@ app.whenReady().then(() => {
   // הפעלה אוטומטית בעליית המחשב (רק בגרסה המותקנת הסופית, לא בפיתוח)
   if (!is.dev) {
     app.setLoginItemSettings({
-      openAtLogin: true
+      openAtLogin: true,
+      args: ['--hidden'] // עולה בשקט למגש המערכת בלי לפתוח חלון
     });
   }
 
   createWindow()
+  createTray()
+  initUpdater()
+
+  ipcMain.on('window:minimize', () => mainWindow?.minimize())
+  ipcMain.on('window:hide', () => mainWindow?.hide())
+  ipcMain.on('app:quit', () => app.quit())
+  ipcMain.handle('app:get-info', () => ({ name: APP_NAME, version: app.getVersion() }))
 
   ipcMain.handle('translate', async (_event, text: string, targetLang: string) => {
     try {
