@@ -1,4 +1,5 @@
-appId: com.electron.app
+# מזהה ייחודי: Windows מזהה לפיו את ההתקנה, וכך עדכון מחליף את הגרסה הקיימת ולא מתקין עותק נוסף
+appId: com.imreykodesh.fasttranslate
 productName: translation-plugin
 directories:
   buildResources: build
@@ -16,9 +17,13 @@ asarUnpack:
 win:
   executableName: translation-plugin
 nsis:
-  artifactName: ${name}-${version}-setup.${ext}
-  shortcutName: ${productName}
-  uninstallDisplayName: ${productName}
+  # שם באנגלית בלבד: הקובץ עולה לאתר, ו-v<גרסה> בשם הוא הפורמט של generate-downloads.js באתר
+  artifactName: FastTranslate-Setup-v${version}.${ext}
+  # התקנה בלחיצה אחת למשתמש הנוכחי, בלי הרשאות מנהל: כך העדכון מותקן בשקט מתוך התוכנה
+  oneClick: true
+  perMachine: false
+  shortcutName: FastTranslate AI
+  uninstallDisplayName: FastTranslate AI
   createDesktopShortcut: always
 mac:
   entitlementsInherit: build/entitlements.mac.plist
@@ -40,10 +45,10 @@ linux:
 appImage:
   artifactName: ${name}-${version}.${ext}
 npmRebuild: false
-# מקור העדכונים של electron-updater (src/main/updater.ts, כרגע כבוי)
+# מקור העדכונים (src/main/updater.ts): אתר אמרי קודש, דרך הדומיין של R2 (המתקין גדול מ-24MB של Cloudflare Pages).
+# scripts/publish-update.ps1 מעלה לשם את המתקין, את ה-blockmap ואת latest.yml.
 publish:
-  provider: github
-  owner: Hodaya-Yfrach
-  repo: translation-plugin
+  provider: generic
+  url: https://downloads.imreykodesh.com/downloads/fasttranslate
 electronDownload:
   mirror: https://npmmirror.com/mirrors/electron/

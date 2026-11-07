@@ -16,7 +16,7 @@ import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import icon from '../../resources/icon.png?asset'
 import { exec } from 'child_process'
 import Tesseract from 'tesseract.js'
-import { initUpdater } from './updater'
+import { initUpdater, installUpdate, getUpdateStatus, onUpdateStatus } from './updater'
 
 const APP_NAME = 'FastTranslate AI'
 // עלייה עם Windows מוסיפה את הדגל הזה (ראו setLoginItemSettings): פותחים ישר למגש המערכת
@@ -51,11 +51,10 @@ const showMainWindow = (): void => {
 
 app.on('second-instance', showMainWindow)
 
-function createTray(): void {
-  const trayIcon = nativeImage.createFromPath(icon).resize({ width: 16, height: 16 })
-  tray = new Tray(trayIcon)
-  tray.setToolTip(`${APP_NAME} - Alt+T תרגום, Alt+S צילום מסך`)
-  tray.setContextMenu(
+// התפריט נבנה מחדש כשמצב העדכון משתנה, כדי להציג "התקנת עדכון" כשיש גרסה מוכנה
+const buildTrayMenu = (): void => {
+  const update = getUpdateStatus()
+  tray?.setContextMenu(
     Menu.buildFromTemplate([
       { label: `פתיחת ${APP_NAME}`, click: showMainWindow },
       {
@@ -65,10 +64,29 @@ function createTray(): void {
           mainWindow?.webContents.send('show-about')
         }
       },
+      ...(update.state === 'downloaded'
+        ? [
+            { type: 'separator' as const },
+            { label: `התקנת עדכון ${update.version} והפעלה מחדש`, click: installUpdate }
+          ]
+        : []),
       { type: 'separator' },
       { label: 'יציאה', click: () => app.quit() }
     ])
   )
+}
+
+function createTray(): void {
+  const trayIcon = nativeImage.createFromPath(icon).resize({ width: 16, height: 16 })
+  tray = new Tray(trayIcon)
+  tray.setToolTip(`${APP_NAME} - Alt+T תרגום, Alt+S צילום מסך`)
+  buildTrayMenu()
+  onUpdateStatus((s) => {
+    if (s.state === 'downloaded') {
+      buildTrayMenu()
+      tray?.setToolTip(`${APP_NAME} - עדכון ${s.version} מוכן להתקנה`)
+    }
+  })
   tray.on('click', () => {
     if (mainWindow?.isVisible() && mainWindow.isFocused()) mainWindow.hide()
     else showMainWindow()
@@ -144,7 +162,7 @@ app.on('will-quit', () => {
 app.whenReady().then(() => {
   if (!gotLock) return
 
-  electronApp.setAppUserModelId('com.electron')
+  electronApp.setAppUserModelId('com.imreykodesh.fasttranslate') // זהה ל-appId ב-electron-builder.yml
   app.on('browser-window-created', (_, window) => {
     optimizer.watchWindowShortcuts(window)
   })

@@ -1,4 +1,3 @@
-provider: github
-owner: Hodaya-Yfrach
-repo: translation-plugin
-updaterCacheDirName: translation-plugin-updater
+provider: generic
+url: https://downloads.imreykodesh.com/downloads/fasttranslate
+updaterCacheDirName: fasttranslate-updater

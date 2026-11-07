@@ -1,100 +1,188 @@
 import { useState, useEffect, useRef, useCallback, type CSSProperties, type JSX } from 'react'
 import appIcon from '../../../resources/icon.png'
 import AboutPanel from './components/AboutPanel'
+import type { UpdateStatus } from '../../preload/index.d'
 import { CloseIcon, InfoIcon, MinimizeIcon, NewPageIcon, PowerIcon } from './components/Icons'
 
 type OcrLine = {
-  text: string;
-  bbox: { x0: number, y0: number, x1: number, y1: number };
-  translatedText?: string;
-  lineH?: number;
-  lineCount?: number;
-};
+  text: string
+  bbox: { x0: number; y0: number; x1: number; y1: number }
+  translatedText?: string
+  lineH?: number
+  lineCount?: number
+}
 
 const hebrewToEnglishMap: Record<string, string> = {
-  '/': 'q', "'": 'w', 'ק': 'e', 'ר': 'r', 'א': 't', 'ט': 'y', 'ו': 'u', 'ן': 'i', 'ם': 'o', 'פ': 'p',
-  'ש': 'a', 'ד': 's', 'ג': 'd', 'כ': 'f', 'ע': 'g', 'י': 'h', 'ח': 'j', 'ל': 'k', 'ך': 'l', 'ף': ';',
-  'ז': 'z', 'ס': 'x', 'ב': 'c', 'ה': 'v', 'נ': 'b', 'מ': 'n', 'צ': 'm', 'ת': ',', 'ץ': '.'
-};
+  '/': 'q',
+  "'": 'w',
+  ק: 'e',
+  ר: 'r',
+  א: 't',
+  ט: 'y',
+  ו: 'u',
+  ן: 'i',
+  ם: 'o',
+  פ: 'p',
+  ש: 'a',
+  ד: 's',
+  ג: 'd',
+  כ: 'f',
+  ע: 'g',
+  י: 'h',
+  ח: 'j',
+  ל: 'k',
+  ך: 'l',
+  ף: ';',
+  ז: 'z',
+  ס: 'x',
+  ב: 'c',
+  ה: 'v',
+  נ: 'b',
+  מ: 'n',
+  צ: 'm',
+  ת: ',',
+  ץ: '.'
+}
 
 const englishToHebrewMap: Record<string, string> = {
-  'q': '/', 'w': "'", 'e': 'ק', 'r': 'ר', 't': 'א', 'y': 'ט', 'u': 'ו', 'i': 'ן', 'o': 'ם', 'p': 'פ',
-  'a': 'ש', 's': 'ד', 'd': 'ג', 'f': 'כ', 'g': 'ע', 'h': 'י', 'j': 'ח', 'k': 'ל', 'l': 'ך', ';': 'ף',
-  'z': 'ז', 'x': 'ס', 'c': 'ב', 'v': 'ה', 'b': 'נ', 'n': 'מ', 'm': 'צ', ',': 'ת', '.': 'ץ',
-  'Q': '/', 'W': "'", 'E': 'ק', 'R': 'ר', 'T': 'א', 'Y': 'ט', 'U': 'ו', 'I': 'ן', 'O': 'ם', 'P': 'פ',
-  'A': 'ש', 'S': 'ד', 'D': 'ג', 'F': 'כ', 'G': 'ע', 'H': 'י', 'J': 'ח', 'K': 'ל', 'L': 'ך', ':': 'ף',
-  'Z': 'ז', 'X': 'ס', 'C': 'ב', 'V': 'ה', 'B': 'נ', 'N': 'מ', 'M': 'צ', '<': 'ת', '>': 'ץ'
-};
+  q: '/',
+  w: "'",
+  e: 'ק',
+  r: 'ר',
+  t: 'א',
+  y: 'ט',
+  u: 'ו',
+  i: 'ן',
+  o: 'ם',
+  p: 'פ',
+  a: 'ש',
+  s: 'ד',
+  d: 'ג',
+  f: 'כ',
+  g: 'ע',
+  h: 'י',
+  j: 'ח',
+  k: 'ל',
+  l: 'ך',
+  ';': 'ף',
+  z: 'ז',
+  x: 'ס',
+  c: 'ב',
+  v: 'ה',
+  b: 'נ',
+  n: 'מ',
+  m: 'צ',
+  ',': 'ת',
+  '.': 'ץ',
+  Q: '/',
+  W: "'",
+  E: 'ק',
+  R: 'ר',
+  T: 'א',
+  Y: 'ט',
+  U: 'ו',
+  I: 'ן',
+  O: 'ם',
+  P: 'פ',
+  A: 'ש',
+  S: 'ד',
+  D: 'ג',
+  F: 'כ',
+  G: 'ע',
+  H: 'י',
+  J: 'ח',
+  K: 'ל',
+  L: 'ך',
+  ':': 'ף',
+  Z: 'ז',
+  X: 'ס',
+  C: 'ב',
+  V: 'ה',
+  B: 'נ',
+  N: 'מ',
+  M: 'צ',
+  '<': 'ת',
+  '>': 'ץ'
+}
 
-const forceEnglish = (text: string): string => text.split('').map(c => hebrewToEnglishMap[c] || c).join('');
-const forceHebrew = (text: string): string => text.split('').map(c => englishToHebrewMap[c] || c).join('');
+const forceEnglish = (text: string): string =>
+  text
+    .split('')
+    .map((c) => hebrewToEnglishMap[c] || c)
+    .join('')
+const forceHebrew = (text: string): string =>
+  text
+    .split('')
+    .map((c) => englishToHebrewMap[c] || c)
+    .join('')
 
 // יעד התרגום לפי השפה הדומיננטית בשורה (ולא "יש אות עברית אחת")
 const pickTarget = (text: string): 'en' | 'he' => {
-  const heb = (text.match(/[\u0590-\u05FF]/g) || []).length;
-  const lat = (text.match(/[a-zA-Z]/g) || []).length;
-  return heb > lat ? 'en' : 'he';
-};
+  const heb = (text.match(/[\u0590-\u05FF]/g) || []).length
+  const lat = (text.match(/[a-zA-Z]/g) || []).length
+  return heb > lat ? 'en' : 'he'
+}
 // שורה שאין בה לפחות 2 אותיות (מספרים, סימנים) לא שווה תרגום
-const isTranslatable = (text: string): boolean => (text.match(/[\u0590-\u05FFa-zA-Z]/g) || []).length >= 2;
+const isTranslatable = (text: string): boolean =>
+  (text.match(/[\u0590-\u05FFa-zA-Z]/g) || []).length >= 2
 
 // מאחד שורות OCR סמוכות לפסקאות, כדי לתרגם משפטים שלמים ולא שורה-שורה
 const groupIntoParagraphs = (lines: OcrLine[]): OcrLine[] => {
-  const sorted = [...lines].sort((a, b) => a.bbox.y0 - b.bbox.y0 || a.bbox.x0 - b.bbox.x0);
-  const groups: OcrLine[][] = [];
+  const sorted = [...lines].sort((a, b) => a.bbox.y0 - b.bbox.y0 || a.bbox.x0 - b.bbox.x0)
+  const groups: OcrLine[][] = []
 
   for (const line of sorted) {
-    const h = line.bbox.y1 - line.bbox.y0;
-    let target: OcrLine[] | undefined;
+    const h = line.bbox.y1 - line.bbox.y0
+    let target: OcrLine[] | undefined
     for (let g = groups.length - 1; g >= 0; g--) {
-      const prev = groups[g][groups[g].length - 1];
-      const prevH = prev.bbox.y1 - prev.bbox.y0;
-      const gap = line.bbox.y0 - prev.bbox.y1;
-      const overlapX = Math.min(line.bbox.x1, prev.bbox.x1) - Math.max(line.bbox.x0, prev.bbox.x0);
-      const minW = Math.min(line.bbox.x1 - line.bbox.x0, prev.bbox.x1 - prev.bbox.x0);
-      const sizeRatio = h / prevH;
+      const prev = groups[g][groups[g].length - 1]
+      const prevH = prev.bbox.y1 - prev.bbox.y0
+      const gap = line.bbox.y0 - prev.bbox.y1
+      const overlapX = Math.min(line.bbox.x1, prev.bbox.x1) - Math.max(line.bbox.x0, prev.bbox.x0)
+      const minW = Math.min(line.bbox.x1 - line.bbox.x0, prev.bbox.x1 - prev.bbox.x0)
+      const sizeRatio = h / prevH
       const aligned =
         Math.abs(line.bbox.x0 - prev.bbox.x0) < 2 * Math.max(h, prevH) ||
-        Math.abs(line.bbox.x1 - prev.bbox.x1) < 2 * Math.max(h, prevH);
+        Math.abs(line.bbox.x1 - prev.bbox.x1) < 2 * Math.max(h, prevH)
       if (
         gap >= -0.3 * Math.min(h, prevH) &&
         gap < 0.5 * Math.max(h, prevH) &&
         overlapX > 0.3 * minW &&
-        sizeRatio > 0.75 && sizeRatio < 1.33 &&
+        sizeRatio > 0.75 &&
+        sizeRatio < 1.33 &&
         aligned
       ) {
-        target = groups[g];
-        break;
+        target = groups[g]
+        break
       }
     }
-    if (target) target.push(line);
-    else groups.push([line]);
+    if (target) target.push(line)
+    else groups.push([line])
   }
 
   return groups
     .map((g): OcrLine => ({
-      text: g.map(l => l.text).join(' '),
+      text: g.map((l) => l.text).join(' '),
       bbox: {
-        x0: Math.min(...g.map(l => l.bbox.x0)),
-        y0: Math.min(...g.map(l => l.bbox.y0)),
-        x1: Math.max(...g.map(l => l.bbox.x1)),
-        y1: Math.max(...g.map(l => l.bbox.y1))
+        x0: Math.min(...g.map((l) => l.bbox.x0)),
+        y0: Math.min(...g.map((l) => l.bbox.y0)),
+        x1: Math.max(...g.map((l) => l.bbox.x1)),
+        y1: Math.max(...g.map((l) => l.bbox.y1))
       },
       lineH: g.reduce((sum, l) => sum + (l.bbox.y1 - l.bbox.y0), 0) / g.length,
       lineCount: g.length
     }))
-    .sort((a, b) => a.bbox.y0 - b.bbox.y0 || a.bbox.x0 - b.bbox.x0);
-};
+    .sort((a, b) => a.bbox.y0 - b.bbox.y0 || a.bbox.x0 - b.bbox.x0)
+}
 
 // בוחר גודל גופן כך שהתרגום ייכנס בתוך התיבה של הטקסט המקורי
 const fitFont = (label: string, w: number, h: number, maxFont: number): number => {
   for (let f = Math.max(maxFont, 9); f > 9; f -= 0.5) {
-    const rows = Math.max(1, Math.ceil((label.length * f * 0.55) / Math.max(w - 4, 1)));
-    if (rows * f * 1.2 <= h + 2) return f;
+    const rows = Math.max(1, Math.ceil((label.length * f * 0.55) / Math.max(w - 4, 1)))
+    if (rows * f * 1.2 <= h + 2) return f
   }
-  return 9;
-};
-
+  return 9
+}
 
 // גודל הטקסט בחלונות הקריאה (נשמר בין הפעלות)
 const FONT_KEY = 'reader-font-size'
@@ -125,6 +213,7 @@ function App(): JSX.Element {
   const [areaSize, setAreaSize] = useState({ w: 0, h: 0 })
   const [fontSize, setFontSize] = useState(loadFontSize)
   const [aboutOpen, setAboutOpen] = useState(false)
+  const [update, setUpdate] = useState<UpdateStatus>({ state: 'disabled' })
   const observerRef = useRef<ResizeObserver | null>(null)
   const overlayAreaRef = useCallback((el: HTMLDivElement | null) => {
     observerRef.current?.disconnect()
@@ -168,6 +257,10 @@ function App(): JSX.Element {
   useEffect(() => {
     window.api.onShowAbout(() => setAboutOpen(true))
 
+    // מצב העדכונים נשמר כאן (מאזין אחד) ומועבר גם לחלון האודות
+    window.api.updates.getStatus().then(setUpdate)
+    window.api.updates.onStatus(setUpdate)
+
     window.api.onTranslateText(async (text: string) => {
       setViewMode('text')
       if (text === 'מפענח תמונה...') {
@@ -206,7 +299,9 @@ function App(): JSX.Element {
       setImageUrl(data.image)
       setIsAnalyzing(false)
       const lines = groupIntoParagraphs(data.lines)
-      setImageLines(lines.map((l) => (isTranslatable(l.text) ? l : { ...l, translatedText: l.text })))
+      setImageLines(
+        lines.map((l) => (isTranslatable(l.text) ? l : { ...l, translatedText: l.text }))
+      )
 
       // תרגום במקביל (5 בקשות בו-זמנית) במקום שורה אחרי שורה
       let next = 0
@@ -341,7 +436,11 @@ function App(): JSX.Element {
                 <div className="pane-header">
                   <span className="lang-pill">English</span>
                   <div className="pane-actions">
-                    <button className="btn primary" onClick={translateEngToHeb} disabled={!englishText}>
+                    <button
+                      className="btn primary"
+                      onClick={translateEngToHeb}
+                      disabled={!englishText}
+                    >
                       תרגום לעברית ↓
                     </button>
                     {copyButton(englishText, 'eng')}
@@ -365,7 +464,11 @@ function App(): JSX.Element {
                 <div className="pane-header">
                   <span className="lang-pill">עברית</span>
                   <div className="pane-actions">
-                    <button className="btn primary" onClick={translateHebToEng} disabled={!hebrewText}>
+                    <button
+                      className="btn primary"
+                      onClick={translateHebToEng}
+                      disabled={!hebrewText}
+                    >
                       ↑ תרגום לאנגלית
                     </button>
                     {copyButton(hebrewText, 'heb')}
@@ -442,7 +545,12 @@ function App(): JSX.Element {
                           <img
                             src={imageUrl}
                             alt="צילום המסך"
-                            style={{ width: '100%', height: '100%', display: 'block', borderRadius: 6 }}
+                            style={{
+                              width: '100%',
+                              height: '100%',
+                              display: 'block',
+                              borderRadius: 6
+                            }}
                           />
                           {showTranslation &&
                             imageLines.map((block, idx) => {
@@ -450,7 +558,8 @@ function App(): JSX.Element {
                               if (!out || out === block.text) return null
                               const bw = (block.bbox.x1 - block.bbox.x0) * fitScale
                               const bh = (block.bbox.y1 - block.bbox.y0) * fitScale
-                              const lineH = (block.lineH ?? block.bbox.y1 - block.bbox.y0) * fitScale
+                              const lineH =
+                                (block.lineH ?? block.bbox.y1 - block.bbox.y0) * fitScale
                               return (
                                 <div
                                   key={idx}
@@ -493,7 +602,10 @@ function App(): JSX.Element {
                             key={idx}
                             title="לחיצה להעתקה"
                             onClick={() => navigator.clipboard.writeText(out)}
-                            style={{ direction: outHeb ? 'rtl' : 'ltr', textAlign: outHeb ? 'right' : 'left' }}
+                            style={{
+                              direction: outHeb ? 'rtl' : 'ltr',
+                              textAlign: outHeb ? 'right' : 'left'
+                            }}
                           >
                             {out}
                           </p>
@@ -519,10 +631,19 @@ function App(): JSX.Element {
             צילום מסך ותרגום
           </span>
         </div>
-        <span>סגירת החלון משאירה את התוכנה פעילה במגש המערכת</span>
+        {update.state === 'downloaded' ? (
+          <span className="update-ready">
+            גרסה {update.version} מוכנה
+            <button className="btn primary" onClick={() => window.api.updates.install()}>
+              הפעלה מחדש ועדכון
+            </button>
+          </span>
+        ) : (
+          <span>סגירת החלון משאירה את התוכנה פעילה במגש המערכת</span>
+        )}
       </footer>
 
-      {aboutOpen && <AboutPanel onClose={closeAbout} />}
+      {aboutOpen && <AboutPanel onClose={closeAbout} update={update} onUpdate={setUpdate} />}
     </div>
   )
 }
