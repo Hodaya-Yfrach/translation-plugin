@@ -26,8 +26,8 @@ const englishToHebrewMap: Record<string, string> = {
   'Z': 'ז', 'X': 'ס', 'C': 'ב', 'V': 'ה', 'B': 'נ', 'N': 'מ', 'M': 'צ', '<': 'ת', '>': 'ץ'
 };
 
-const forceEnglish = (text: string) => text.split('').map(c => hebrewToEnglishMap[c] || c).join('');
-const forceHebrew = (text: string) => text.split('').map(c => englishToHebrewMap[c] || c).join('');
+const forceEnglish = (text: string): string => text.split('').map(c => hebrewToEnglishMap[c] || c).join('');
+const forceHebrew = (text: string): string => text.split('').map(c => englishToHebrewMap[c] || c).join('');
 
 // יעד התרגום לפי השפה הדומיננטית בשורה (ולא "יש אות עברית אחת")
 const pickTarget = (text: string): 'en' | 'he' => {
@@ -36,7 +36,7 @@ const pickTarget = (text: string): 'en' | 'he' => {
   return heb > lat ? 'en' : 'he';
 };
 // שורה שאין בה לפחות 2 אותיות (מספרים, סימנים) לא שווה תרגום
-const isTranslatable = (text: string) => (text.match(/[\u0590-\u05FFa-zA-Z]/g) || []).length >= 2;
+const isTranslatable = (text: string): boolean => (text.match(/[\u0590-\u05FFa-zA-Z]/g) || []).length >= 2;
 
 // מאחד שורות OCR סמוכות לפסקאות, כדי לתרגם משפטים שלמים ולא שורה-שורה
 const groupIntoParagraphs = (lines: OcrLine[]): OcrLine[] => {

@@ -45,9 +45,7 @@ export default function AboutPanel({ onClose }: Props): JSX.Element {
   }, [onClose])
 
   const busy =
-    update.state === 'checking' ||
-    update.state === 'available' ||
-    update.state === 'downloading'
+    update.state === 'checking' || update.state === 'available' || update.state === 'downloading'
 
   return (
     <div className="modal-backdrop" onMouseDown={onClose}>
