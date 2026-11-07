@@ -238,7 +238,7 @@ app.whenReady().then(() => {
 
     // הקריאה מהלוח אסינכרונית, ולכן בודקים שוב רק אחרי שהבדיקה הקודמת הסתיימה (לא setInterval)
     let attempts = 0;
-    const checkClipboard = async () => {
+    const checkClipboard = async (): Promise<void> => {
       attempts++;
       let newImage: NativeImage | null = null;
       try {
