@@ -1,4 +1,4 @@
-import { app, shell, BrowserWindow, ipcMain, globalShortcut, clipboard, NativeImage } from 'electron'
+import { app, shell, BrowserWindow, ipcMain, globalShortcut, clipboard, nativeImage, NativeImage } from 'electron'
 import { join } from 'path'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 // @ts-ignore
@@ -104,8 +104,7 @@ app.whenReady().then(() => {
   // הפעלה אוטומטית בעליית המחשב (רק בגרסה המותקנת הסופית, לא בפיתוח)
   if (!is.dev) {
     app.setLoginItemSettings({
-      openAtLogin: true,
-      openAsHidden: true // מפעיל את התוכנה שקופה ברקע מבלי להקפיץ חלון
+      openAtLogin: true
     });
   }
 
@@ -197,18 +196,36 @@ app.whenReady().then(() => {
     win.setAlwaysOnTop(true); 
   };
 
-  globalShortcut.register('Alt+T', () => {
-    setTimeout(() => {
-      const text = clipboard.readText().trim();
-      const image = clipboard.readImage();
-      if (!mainWindow) return;
+  // מ-Electron 44 אין clipboard.readImage(): קוראים את הלוח דרך clipboard.read() ומחפשים פריט image/*
+  const readClipboardImage = async (): Promise<NativeImage | null> => {
+    const items = await clipboard.read();
+    for (const item of items) {
+      const type = item.types.find((t) => t.startsWith('image/'));
+      if (!type) continue;
+      const data = await item.getType(type);
+      if (!('arrayBuffer' in data)) continue;
+      const image = nativeImage.createFromBuffer(Buffer.from(await data.arrayBuffer()));
+      if (!image.isEmpty()) return image;
+    }
+    return null;
+  };
 
-      if (text) {
-        forceWindowToFront(mainWindow);
-        setTimeout(() => mainWindow?.webContents.send('translate-text', text), 50);
-      } else if (!image.isEmpty()) {
-        forceWindowToFront(mainWindow);
-        processImageToUI(image, mainWindow);
+  globalShortcut.register('Alt+T', () => {
+    setTimeout(async () => {
+      try {
+        const text = (await clipboard.readText()).trim();
+        const image = text ? null : await readClipboardImage();
+        if (!mainWindow) return;
+
+        if (text) {
+          forceWindowToFront(mainWindow);
+          setTimeout(() => mainWindow?.webContents.send('translate-text', text), 50);
+        } else if (image) {
+          forceWindowToFront(mainWindow);
+          processImageToUI(image, mainWindow);
+        }
+      } catch (err) {
+        console.error(err);
       }
     }, 50);
   });
@@ -219,22 +236,29 @@ app.whenReady().then(() => {
     clipboard.clear(); 
     exec('start ms-screenclip:'); 
 
+    // הקריאה מהלוח אסינכרונית, ולכן בודקים שוב רק אחרי שהבדיקה הקודמת הסתיימה (לא setInterval)
     let attempts = 0;
-    const checkClipboard = setInterval(() => {
+    const checkClipboard = async () => {
       attempts++;
-      const newImage = clipboard.readImage();
-      
-      if (!newImage.isEmpty()) {
-        clearInterval(checkClipboard); 
+      let newImage: NativeImage | null = null;
+      try {
+        newImage = await readClipboardImage();
+      } catch (err) {
+        console.error(err);
+      }
+
+      if (newImage) {
         snipping = false;
         if (mainWindow) {
           forceWindowToFront(mainWindow);
           processImageToUI(newImage, mainWindow);
         }
       } else if (attempts >= 30) {
-        clearInterval(checkClipboard); 
         snipping = false;
+      } else {
+        setTimeout(checkClipboard, 500);
       }
-    }, 500); 
+    };
+    setTimeout(checkClipboard, 500);
   });
 })
