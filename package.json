@@ -1,10 +1,10 @@
 {
   "name": "translation-plugin",
   "version": "1.0.0",
-  "description": "An Electron application with React and TypeScript",
+  "description": "FastTranslate AI - Hebrew-English text and screenshot translation for Windows, with OCR",
   "main": "./out/main/index.js",
-  "author": "example.com",
-  "homepage": "https://electron-vite.org",
+  "author": "Hodaya Yfrach",
+  "homepage": "https://github.com/Hodaya-Yfrach/translation-plugin",
   "scripts": {
     "format": "prettier --write .",
     "lint": "eslint --cache .",
@@ -27,6 +27,8 @@
     "tesseract.js": "^7.0.0"
   },
   "devDependencies": {
+    "@electron-toolkit/eslint-config-prettier": "^3.0.1",
+    "@electron-toolkit/eslint-config-ts": "^3.1.0",
     "@electron-toolkit/tsconfig": "^2.0.0",
     "@types/node": "^22.19.1",
     "@types/react": "^19.2.7",
@@ -35,6 +37,10 @@
     "electron": "^45.2.3",
     "electron-builder": "^26.0.12",
     "electron-vite": "^5.0.0",
+    "eslint": "^9.39.5",
+    "eslint-plugin-react": "^7.37.5",
+    "eslint-plugin-react-hooks": "^7.1.1",
+    "eslint-plugin-react-refresh": "^0.5.7",
     "prettier": "^3.7.4",
     "react": "^19.2.1",
     "react-dom": "^19.2.1",
