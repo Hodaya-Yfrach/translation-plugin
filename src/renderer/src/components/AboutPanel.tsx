@@ -9,7 +9,7 @@ const DEVELOPER_GITHUB = 'https://github.com/Hodaya-Yfrach'
 const describeUpdate = (status: UpdateStatus): string => {
   switch (status.state) {
     case 'disabled':
-      return 'עדכונים אוטומטיים יופעלו בגרסה עתידית'
+      return 'עדכונים פועלים רק בגרסה המותקנת'
     case 'idle':
     case 'not-available':
       return 'התוכנה מעודכנת'
@@ -22,20 +22,21 @@ const describeUpdate = (status: UpdateStatus): string => {
     case 'downloaded':
       return `גרסה ${status.version} מוכנה להתקנה`
     case 'error':
-      return 'בדיקת העדכון נכשלה'
+      return status.message
   }
 }
 
-type Props = { onClose: () => void }
+type Props = {
+  onClose: () => void
+  update: UpdateStatus
+  onUpdate: (status: UpdateStatus) => void
+}
 
-export default function AboutPanel({ onClose }: Props): JSX.Element {
+export default function AboutPanel({ onClose, update, onUpdate }: Props): JSX.Element {
   const [info, setInfo] = useState<{ name: string; version: string } | null>(null)
-  const [update, setUpdate] = useState<UpdateStatus>({ state: 'disabled' })
 
   useEffect(() => {
     window.api.getAppInfo().then(setInfo)
-    window.api.updates.getStatus().then(setUpdate)
-    window.api.updates.onStatus(setUpdate)
 
     const onKey = (e: KeyboardEvent): void => {
       if (e.key === 'Escape') onClose()
@@ -113,12 +114,15 @@ export default function AboutPanel({ onClose }: Props): JSX.Element {
               <button
                 className="btn"
                 disabled={update.state === 'disabled' || busy}
-                onClick={() => window.api.updates.check().then(setUpdate)}
+                onClick={() => window.api.updates.check().then(onUpdate)}
               >
                 בדיקת עדכונים
               </button>
             )}
           </div>
+          {update.state === 'downloaded' && update.notes && (
+            <p className="update-notes">{update.notes}</p>
+          )}
         </div>
 
         <div className="about-footer">
