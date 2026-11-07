@@ -40,8 +40,10 @@ linux:
 appImage:
   artifactName: ${name}-${version}.${ext}
 npmRebuild: false
+# מקור העדכונים של electron-updater (src/main/updater.ts, כרגע כבוי)
 publish:
-  provider: generic
-  url: https://example.com/auto-updates
+  provider: github
+  owner: Hodaya-Yfrach
+  repo: translation-plugin
 electronDownload:
   mirror: https://npmmirror.com/mirrors/electron/
