@@ -7,7 +7,9 @@ This project currently has some known vulnerabilities in its dependencies:
 ### electron-builder and its dependencies (moderate)
 `electron-builder` 26 pulls in versions of `app-builder-lib`, `dmg-builder`, `@electron/universal` and `minimatch` (v7.0.0 - v11.0.0) with moderate-severity advisories, including a potential denial of service via globparts amplification in `minimatch`.
 
-These packages are build tools only. They are not shipped inside the installed application.
+The same `minimatch` advisory is also reported through `typescript-eslint` (used by `npm run lint`).
+
+These packages are build and lint tools only. They are not shipped inside the installed application.
 
 **Status**: Waiting for an upstream fix in electron-builder 26.x. `npm audit` only offers a downgrade to electron-builder 24, which is not planned.
 
