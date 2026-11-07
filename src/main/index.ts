@@ -123,7 +123,8 @@ function createWindow(): void {
   })
 
   mainWindow.webContents.setWindowOpenHandler((details) => {
-    shell.openExternal(details.url)
+    // רק קישורי https נפתחים בדפדפן (למשל קישור ה-GitHub בחלון האודות)
+    if (details.url.startsWith('https://')) shell.openExternal(details.url)
     return { action: 'deny' }
   })
 
