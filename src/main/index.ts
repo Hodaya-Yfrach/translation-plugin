@@ -1,10 +1,26 @@
-import { app, shell, BrowserWindow, ipcMain, globalShortcut, clipboard, NativeImage } from 'electron'
+import {
+  app,
+  shell,
+  BrowserWindow,
+  ipcMain,
+  globalShortcut,
+  clipboard,
+  nativeImage,
+  NativeImage,
+  Tray,
+  Menu
+} from 'electron'
 import { join } from 'path'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 // @ts-ignore
 import icon from '../../resources/icon.png?asset'
 import { exec } from 'child_process'
 import Tesseract from 'tesseract.js'
+import { initUpdater, installUpdate, getUpdateStatus, onUpdateStatus } from './updater'
+
+const APP_NAME = 'FastTranslate AI'
+// עלייה עם Windows מוסיפה את הדגל הזה (ראו setLoginItemSettings): פותחים ישר למגש המערכת
+const startHidden = process.argv.includes('--hidden')
 
 process.on('uncaughtException', (error) => {
   console.error("שגיאת מערכת נתפסה:", error);
@@ -17,6 +33,7 @@ if (!gotLock) {
 }
 
 let mainWindow: BrowserWindow | null = null
+let tray: Tray | null = null
 let quitting = false
 let snipping = false
 let workerPromise: Promise<Tesseract.Worker> | null = null
@@ -25,13 +42,56 @@ app.on('before-quit', () => {
   quitting = true
 })
 
-app.on('second-instance', () => {
-  if (mainWindow) {
-    if (mainWindow.isMinimized()) mainWindow.restore()
-    mainWindow.show()
-    mainWindow.focus()
-  }
-})
+const showMainWindow = (): void => {
+  if (!mainWindow) return
+  if (mainWindow.isMinimized()) mainWindow.restore()
+  mainWindow.show()
+  mainWindow.focus()
+}
+
+app.on('second-instance', showMainWindow)
+
+// התפריט נבנה מחדש כשמצב העדכון משתנה, כדי להציג "התקנת עדכון" כשיש גרסה מוכנה
+const buildTrayMenu = (): void => {
+  const update = getUpdateStatus()
+  tray?.setContextMenu(
+    Menu.buildFromTemplate([
+      { label: `פתיחת ${APP_NAME}`, click: showMainWindow },
+      {
+        label: 'אודות',
+        click: () => {
+          showMainWindow()
+          mainWindow?.webContents.send('show-about')
+        }
+      },
+      ...(update.state === 'downloaded'
+        ? [
+            { type: 'separator' as const },
+            { label: `התקנת עדכון ${update.version} והפעלה מחדש`, click: installUpdate }
+          ]
+        : []),
+      { type: 'separator' },
+      { label: 'יציאה', click: () => app.quit() }
+    ])
+  )
+}
+
+function createTray(): void {
+  const trayIcon = nativeImage.createFromPath(icon).resize({ width: 16, height: 16 })
+  tray = new Tray(trayIcon)
+  tray.setToolTip(`${APP_NAME} - Alt+T תרגום, Alt+S צילום מסך`)
+  buildTrayMenu()
+  onUpdateStatus((s) => {
+    if (s.state === 'downloaded') {
+      buildTrayMenu()
+      tray?.setToolTip(`${APP_NAME} - עדכון ${s.version} מוכן להתקנה`)
+    }
+  })
+  tray.on('click', () => {
+    if (mainWindow?.isVisible() && mainWindow.isFocused()) mainWindow.hide()
+    else showMainWindow()
+  })
+}
 
 const getWorker = () => {
   if (!workerPromise) {
@@ -53,22 +113,26 @@ const getWorker = () => {
 
 function createWindow(): void {
   mainWindow = new BrowserWindow({
-    width: 1000, 
-    height: 600, 
-    minWidth: 500,  // מונע הקטנה שתשבור את העיצוב
-    minHeight: 400, // מונע הקטנה שתשבור את העיצוב
-    resizable: true, // מכריח את ווינדוס לאפשר מתיחה
+    title: APP_NAME,
+    width: 1000,
+    height: 640,
+    minWidth: 560, // מונע הקטנה שתשבור את העיצוב
+    minHeight: 420,
     alwaysOnTop: true,
-    show: true, 
+    show: false, // מוצג ב-ready-to-show כדי שלא יהבהב חלון ריק
+    // חלון בלי מסגרת אבל לא שקוף: ב-Windows 11 הוא מקבל פינות מעוגלות, צל ושינוי גודל רגיל
     frame: false,
-    transparent: true,
+    backgroundColor: '#F4F6F8',
     icon,
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
       sandbox: false
     }
   })
-// ... המשך הקוד נשאר זהה
+
+  mainWindow.once('ready-to-show', () => {
+    if (!startHidden) mainWindow?.show()
+  })
 
   mainWindow.on('close', (event) => {
     if (quitting) return;
@@ -77,7 +141,8 @@ function createWindow(): void {
   })
 
   mainWindow.webContents.setWindowOpenHandler((details) => {
-    shell.openExternal(details.url)
+    // רק קישורי https נפתחים בדפדפן (למשל קישור ה-GitHub בחלון האודות)
+    if (details.url.startsWith('https://')) shell.openExternal(details.url)
     return { action: 'deny' }
   })
 
@@ -97,7 +162,7 @@ app.on('will-quit', () => {
 app.whenReady().then(() => {
   if (!gotLock) return
 
-  electronApp.setAppUserModelId('com.electron')
+  electronApp.setAppUserModelId('com.imreykodesh.fasttranslate') // זהה ל-appId ב-electron-builder.yml
   app.on('browser-window-created', (_, window) => {
     optimizer.watchWindowShortcuts(window)
   })
@@ -105,11 +170,18 @@ app.whenReady().then(() => {
   if (!is.dev) {
     app.setLoginItemSettings({
       openAtLogin: true,
-      openAsHidden: true // מפעיל את התוכנה שקופה ברקע מבלי להקפיץ חלון
+      args: ['--hidden'] // עולה בשקט למגש המערכת בלי לפתוח חלון
     });
   }
 
   createWindow()
+  createTray()
+  initUpdater()
+
+  ipcMain.on('window:minimize', () => mainWindow?.minimize())
+  ipcMain.on('window:hide', () => mainWindow?.hide())
+  ipcMain.on('app:quit', () => app.quit())
+  ipcMain.handle('app:get-info', () => ({ name: APP_NAME, version: app.getVersion() }))
 
   ipcMain.handle('translate', async (_event, text: string, targetLang: string) => {
     try {
@@ -197,18 +269,36 @@ app.whenReady().then(() => {
     win.setAlwaysOnTop(true); 
   };
 
-  globalShortcut.register('Alt+T', () => {
-    setTimeout(() => {
-      const text = clipboard.readText().trim();
-      const image = clipboard.readImage();
-      if (!mainWindow) return;
+  // מ-Electron 44 אין clipboard.readImage(): קוראים את הלוח דרך clipboard.read() ומחפשים פריט image/*
+  const readClipboardImage = async (): Promise<NativeImage | null> => {
+    const items = await clipboard.read();
+    for (const item of items) {
+      const type = item.types.find((t) => t.startsWith('image/'));
+      if (!type) continue;
+      const data = await item.getType(type);
+      if (!('arrayBuffer' in data)) continue;
+      const image = nativeImage.createFromBuffer(Buffer.from(await data.arrayBuffer()));
+      if (!image.isEmpty()) return image;
+    }
+    return null;
+  };
 
-      if (text) {
-        forceWindowToFront(mainWindow);
-        setTimeout(() => mainWindow?.webContents.send('translate-text', text), 50);
-      } else if (!image.isEmpty()) {
-        forceWindowToFront(mainWindow);
-        processImageToUI(image, mainWindow);
+  globalShortcut.register('Alt+T', () => {
+    setTimeout(async () => {
+      try {
+        const text = (await clipboard.readText()).trim();
+        const image = text ? null : await readClipboardImage();
+        if (!mainWindow) return;
+
+        if (text) {
+          forceWindowToFront(mainWindow);
+          setTimeout(() => mainWindow?.webContents.send('translate-text', text), 50);
+        } else if (image) {
+          forceWindowToFront(mainWindow);
+          processImageToUI(image, mainWindow);
+        }
+      } catch (err) {
+        console.error(err);
       }
     }, 50);
   });
@@ -219,22 +309,29 @@ app.whenReady().then(() => {
     clipboard.clear(); 
     exec('start ms-screenclip:'); 
 
+    // הקריאה מהלוח אסינכרונית, ולכן בודקים שוב רק אחרי שהבדיקה הקודמת הסתיימה (לא setInterval)
     let attempts = 0;
-    const checkClipboard = setInterval(() => {
+    const checkClipboard = async (): Promise<void> => {
       attempts++;
-      const newImage = clipboard.readImage();
-      
-      if (!newImage.isEmpty()) {
-        clearInterval(checkClipboard); 
+      let newImage: NativeImage | null = null;
+      try {
+        newImage = await readClipboardImage();
+      } catch (err) {
+        console.error(err);
+      }
+
+      if (newImage) {
         snipping = false;
         if (mainWindow) {
           forceWindowToFront(mainWindow);
           processImageToUI(newImage, mainWindow);
         }
       } else if (attempts >= 30) {
-        clearInterval(checkClipboard); 
         snipping = false;
+      } else {
+        setTimeout(checkClipboard, 500);
       }
-    }, 500); 
+    };
+    setTimeout(checkClipboard, 500);
   });
 })

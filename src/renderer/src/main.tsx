@@ -1,3 +1,4 @@
+import '@fontsource-variable/heebo'
 import './assets/main.css'
 
 import { StrictMode } from 'react'
